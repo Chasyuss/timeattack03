@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FaHeart, FaRegHeart } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { todoApi } from "../api/todos";
@@ -20,24 +20,57 @@ export default function TodoList() {
 
   // TODO: 아래 handleLike 로 구현되어 있는 부분을 useMutation 으로 리팩터링 해보세요. 모든 기능은 동일하게 동작해야 합니다.
   const queryClient = useQueryClient();
-  const handleLike = async (id, currentLiked) => {
-    const previousTodos = [...todos];
-    try {
-      queryClient.setQueryData(["todos"], (prev) =>
-        prev.map((todo) =>
-          todo.id === id ? { ...todo, liked: !todo.liked } : todo,
-        ),
-      );
-      await todoApi.patch(`/todos/${id}`, {
-        liked: !currentLiked,
-      });
-    } catch (err) {
-      console.error(err);
-      queryClient.setQueryData(["todos"], previousTodos);
-    } finally {
-      refetch();
+
+  const mutation = useMutation(
+    async ({ id, liked }) => {
+      await todoApi.patch(`/todos/${id}`, { liked });
+    },
+    {
+      onMutate: async ({ id, liked }) => {
+        await queryClient.cancelQueries(["todos"]);
+
+        const previousTodos = queryClient.getQueryData(["todos"]);
+
+        queryClient.setQueryData(["todos"], (prev) =>
+          prev.map((todo) =>
+            todo.id === id ? { ...todo, liked: liked } : todo
+          )
+        );
+
+        return { previousTodos };
+      },
+      onError: (err, context) => {
+        queryClient.setQueryData(["todos"], context.previousTodos);
+        console.error(err);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries(["todos"]);
+      },
     }
+  );
+
+  const handleLike = (id, currentLiked) => {
+    mutation.mutate({ id, liked: currentLiked });
   };
+
+  // const handleLike = async (id, currentLiked) => {
+  //   const previousTodos = [...todos];
+  //   try {
+  //     queryClient.setQueryData(["todos"], (prev) =>
+  //       prev.map((todo) =>
+  //         todo.id === id ? { ...todo, liked: !todo.liked } : todo,
+  //       ),
+  //     );
+  //     await todoApi.patch(`/todos/${id}`, {
+  //       liked: !currentLiked,
+  //     });
+  //   } catch (err) {
+  //     console.error(err);
+  //     queryClient.setQueryData(["todos"], previousTodos);
+  //   } finally {
+  //     refetch();
+  //   }
+  // };
 
   if (isPending) {
     return <div style={{ fontSize: 36 }}>로딩중...</div>;
