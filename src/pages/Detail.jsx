@@ -32,9 +32,10 @@ export default function Detail() {
   const { isLoading, error, data } = useQuery({
     queryKey: ['todo', id],
     queryFn: async () => {
-
-    }
-  })
+      const response = await todoApi.get(`/todos/${id}`);
+      return response.data;
+    },
+  });
 
 
 
